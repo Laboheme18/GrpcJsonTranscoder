@@ -5,15 +5,18 @@
     <!--<SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>GrpcJsonTranscoder.pfx</AssemblyOriginatorKeyFile>-->
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Description>gRPC-JSON transcoder - This is a filter which allows a RESTful JSON API client to send requests to .NET web server over HTTP and get proxied to a gRPC service</Description>
     <Copyright>@ Thang Chung</Copyright>
-    <PackageProjectUrl>https://github.com/thangchung/GrpcJsonTranscoder</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/thangchung/GrpcJsonTranscoder</RepositoryUrl>
-    <Authors>Thang Chung</Authors>
-    <Company />
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
+
+
+    <PackageId>Laboheme.GrpcJsonTranscoder</PackageId>
+    <Authors>David Violet</Authors>
+    <Company>Laboheme</Company>
+    <RepositoryUrl>https://github.com/Laboheme18/GrpcJsonTranscoder.git</RepositoryUrl>
+
   </PropertyGroup>
 
   <ItemGroup>

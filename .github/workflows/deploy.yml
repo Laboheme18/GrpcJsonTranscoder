@@ -1,0 +1,19 @@
+name: Deploy GrpcJsonTranscoder
+on:
+  push:
+    branch:
+      - "master"
+
+jobs:
+  deploy_GrpcJsonTranscoder:
+    name: Deploy GrpcJsonTranscoder
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checking out code from the repository
+        uses: actions/checkout@v3
+
+      - run: dotnet nuget add source --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/Laboheme18/index.json"
+
+      - run: dotnet pack src/GrpcJsonTranscoder/GrpcJsonTranscoder.csproj --configuration release
+
+      - run: dotnet nuget push "src/GrpcJsonTranscoder/**/*.nupkg" --source github --skip-duplicate
