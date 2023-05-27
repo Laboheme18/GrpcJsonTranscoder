@@ -9,6 +9,7 @@ using Grpc.Core.Interceptors;
 using GrpcJsonTranscoder.Grpc;
 using GrpcJsonTranscoder.Internal.Grpc;
 using GrpcJsonTranscoder.Internal.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
@@ -21,6 +22,7 @@ namespace GrpcJsonTranscoder
 {
     public static class DownStreamContextExtensions
     {
+/*
         public static async Task HandleGrpcRequestAsync(this DownstreamContext context, Func<Task> next, IEnumerable<Interceptor> interceptors = null, SslCredentials secureCredentials = null)
         {
             // ignore if the request is not a gRPC content type
@@ -77,7 +79,7 @@ namespace GrpcJsonTranscoder
                     {
                         client = new MethodDescriptorCaller(channel);
                     }
-                    
+
                     var concreteObject = JsonConvert.DeserializeObject(requestJsonData, methodDescriptor.InputType.ClrType);
                     var result = await client.InvokeAsync(methodDescriptor, context.HttpContext.GetRequestHeaders(), concreteObject);
                     logger.LogDebug($"gRPC response called with {JsonConvert.SerializeObject(result)}");
@@ -92,6 +94,83 @@ namespace GrpcJsonTranscoder
 
                     context.HttpContext.Response.ContentType = "application/json";
                     context.DownstreamResponse = new DownstreamResponse(httpResponseMessage);
+                }
+            }
+        }
+*/
+        public static async Task HandleGrpcRequestAsync(this HttpContext context, Func<Task> next, IEnumerable<Interceptor> interceptors = null, SslCredentials secureCredentials = null)
+        {
+            // ignore if the request is not a gRPC content type
+            if (!context.Request.Headers.Any(h => h.Key.ToLowerInvariant() == "content-type" && h.Value == "application/grpc"))
+            {
+                await next.Invoke();
+            }
+            else
+            {
+                var methodPath = context.Items.DownstreamRoute().DownstreamPathTemplate.Value;
+                var grpcAssemblyResolver = context.RequestServices.GetRequiredService<GrpcAssemblyResolver>();
+                var methodDescriptor = grpcAssemblyResolver.FindMethodDescriptor(methodPath.Split('/').Last().ToUpperInvariant());
+
+                if (methodDescriptor == null)
+                {
+                    await next.Invoke();
+                }
+                else
+                {
+                    var logger = context.RequestServices.GetRequiredService<IOcelotLoggerFactory>().CreateLogger<GrpcAssemblyResolver>();
+                    var upstreamHeaders = new Dictionary<string, string>
+                            {
+                                { "x-grpc-route-data", JsonConvert.SerializeObject(context.Items.TemplatePlaceholderNameAndValues().Select(x => new {x.Name, x.Value})) },
+                                { "x-grpc-body-data", await context.Items.DownstreamRequest().Content.ReadAsStringAsync() }
+                            };
+
+                    logger.LogInformation($"Upstream request method is {context.Request.Method}");
+                    logger.LogInformation($"Upstream header data for x-grpc-route-data is {upstreamHeaders["x-grpc-route-data"]}");
+                    logger.LogInformation($"Upstream header data for x-grpc-body-data is {upstreamHeaders["x-grpc-body-data"]}");
+                    var requestObject = context.ParseRequestData(upstreamHeaders);
+                    var requestJsonData = JsonConvert.SerializeObject(requestObject);
+                    logger.LogInformation($"Request object data is {requestJsonData}");
+
+                    var loadBalancerFactory = context.RequestServices.GetRequiredService<ILoadBalancerFactory>();
+                    var loadBalancerResponse = loadBalancerFactory.Get(context.Items.DownstreamRoute(), context.Items.IInternalConfiguration().ServiceProviderConfiguration);
+                    var serviceHostPort = await loadBalancerResponse.Data.Lease(context);
+
+                    var downstreamHost = $"{serviceHostPort.Data.DownstreamHost}:{serviceHostPort.Data.DownstreamPort}";
+                    logger.LogInformation($"Downstream IP Address is {downstreamHost}");
+
+                    var channel = new Channel(downstreamHost, secureCredentials ?? ChannelCredentials.Insecure);
+                    MethodDescriptorCaller client;
+                    if (interceptors != null && interceptors.Any())
+                    {
+                        CallInvoker callInvoker = null;
+                        foreach (var interceptor in interceptors)
+                        {
+                            callInvoker = channel.Intercept(interceptor);
+                        }
+                        client = new MethodDescriptorCaller(callInvoker);
+                    }
+                    else
+                    {
+                        client = new MethodDescriptorCaller(channel);
+                    }
+
+                    var concreteObject = JsonConvert.DeserializeObject(requestJsonData, methodDescriptor.InputType.ClrType);
+                    var result = await client.InvokeAsync(methodDescriptor, context.GetRequestHeaders(), concreteObject);
+                    logger.LogDebug($"gRPC response called with {JsonConvert.SerializeObject(result)}");
+
+                    var jsonSerializer = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };
+                    var grpcHttpContent = new GrpcHttpContent(JsonConvert.SerializeObject(result, jsonSerializer));
+                    var response = new OkResponse<GrpcHttpContent>(grpcHttpContent);
+
+                    var httpResponseMessage = new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = response.Data
+                    };
+
+                    context.Response.ContentType = "application/json";
+                    context.Response.Headers.ContentType = "application/json";
+                    context.Response.Headers.ContentLength = grpcHttpContent.GetResultLength();
+                    context.Items.UpsertDownstreamResponse(new DownstreamResponse(httpResponseMessage));
                 }
             }
         }

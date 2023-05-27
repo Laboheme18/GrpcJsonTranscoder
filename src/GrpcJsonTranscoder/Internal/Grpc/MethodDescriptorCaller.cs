@@ -42,10 +42,15 @@ namespace GrpcJsonTranscoder.Internal.Grpc
             }
 
             var callGrpcAsyncCoreMethod = typeof(MethodDescriptorCaller).GetMethod("CallGrpcAsyncCore", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            try {
+                var task = (Task<object>)callGrpcAsyncCoreMethod?.MakeGenericMethod(new Type[] { method.InputType.ClrType, method.OutputType.ClrType }).Invoke(this, new [] { method, headers, requests });
+                return task;
+            } catch(Exception err)
+            {
+                throw err;
+            }
 
-            var task = (Task<object>)callGrpcAsyncCoreMethod?.MakeGenericMethod(new Type[] { method.InputType.ClrType, method.OutputType.ClrType }).Invoke(this, new [] { method, headers, requests });
-
-            return task;
+            
         }
 
         [DebuggerStepThrough]
