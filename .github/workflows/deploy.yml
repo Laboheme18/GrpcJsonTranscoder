@@ -14,6 +14,6 @@ jobs:
 
       - run: dotnet nuget add source --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/Laboheme18/index.json"
 
-      - run: dotnet pack src/GrpcJsonTranscoder/GrpcJsonTranscoder.csproj --configuration release
+      - run: dotnet build src/GrpcJsonTranscoder/GrpcJsonTranscoder.csproj --configuration release
 
       - run: dotnet nuget push "src/GrpcJsonTranscoder/**/*.nupkg" --source github --skip-duplicate
